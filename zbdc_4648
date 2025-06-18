@@ -1,0 +1,151 @@
+REPORT zbdc_4648
+       NO STANDARD PAGE HEADING LINE-SIZE 255.
+
+* Include bdcrecx1_s:
+* The call transaction using is called WITH AUTHORITY-CHECK!
+* If you have own auth.-checks you can use include bdcrecx1 instead.
+*INCLUDE bdcrecx1_s.
+
+TYPES: BEGIN OF lty_data,
+         matnr TYPE matnr,
+         mbrsh TYPE mbrsh,
+         mtart TYPE mtart,
+         maktx TYPE maktx,
+         meins TYPE meins,
+       END OF lty_data.
+
+DATA: lt_data TYPE TABLE OF lty_data,
+      ls_data TYPE lty_data.
+
+DATA: lv_file TYPE string.
+
+DATA: lt_bdcdata TYPE TABLE OF bdcdata,
+      ls_bdcdata TYPE bdcdata.
+
+DATA: LT_MESSTAB TYPE TABLE OF BDCMSGCOLL,
+      LS_MESSTAB TYPE BDCMSGCOLL.
+
+PARAMETERS: p_file TYPE localfile.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = ' '
+    IMPORTING
+      file_name     = p_file.
+
+
+
+START-OF-SELECTION.
+
+  lv_file = p_file.
+
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      filename            = lv_file
+*     FILETYPE            = 'ASC'
+      has_field_separator = 'X'
+*     HEADER_LENGTH       = 0
+*     READ_BY_LINE        = 'X'
+*     DAT_MODE            = ' '
+*     CODEPAGE            = ' '
+*     IGNORE_CERR         = ABAP_TRUE
+*     REPLACEMENT         = '#'
+*     CHECK_BOM           = ' '
+*     VIRUS_SCAN_PROFILE  =
+*     NO_AUTH_CHECK       = ' '
+* IMPORTING
+*     FILELENGTH          =
+*     HEADER              =
+    TABLES
+      data_tab            = lt_data
+* CHANGING
+*     ISSCANPERFORMED     = ' '
+* EXCEPTIONS
+*     FILE_OPEN_ERROR     = 1
+*     FILE_READ_ERROR     = 2
+*     NO_BATCH            = 3
+*     GUI_REFUSE_FILETRANSFER       = 4
+*     INVALID_TYPE        = 5
+*     NO_AUTHORITY        = 6
+*     UNKNOWN_ERROR       = 7
+*     BAD_DATA_FORMAT     = 8
+*     HEADER_NOT_ALLOWED  = 9
+*     SEPARATOR_NOT_ALLOWED         = 10
+*     HEADER_TOO_LONG     = 11
+*     UNKNOWN_DP_ERROR    = 12
+*     ACCESS_DENIED       = 13
+*     DP_OUT_OF_MEMORY    = 14
+*     DISK_FULL           = 15
+*     DP_TIMEOUT          = 16
+*     OTHERS              = 17
+    .
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+
+
+  LOOP AT lt_data INTO ls_data.
+*perform open_group.
+
+    PERFORM bdc_dynpro      USING 'SAPLMGMM' '0060'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RMMG1-MTART'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=ENTR'.
+    PERFORM bdc_field       USING 'RMMG1-MATNR'
+                                  ls_data-matnr.
+    PERFORM bdc_field       USING 'RMMG1-MBRSH'
+                                  ls_data-mbrsh.
+    PERFORM bdc_field       USING 'RMMG1-MTART'
+                                  ls_data-mtart.
+    PERFORM bdc_dynpro      USING 'SAPLMGMM' '0070'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'MSICHTAUSW-DYTXT(01)'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=ENTR'.
+    PERFORM bdc_field       USING 'MSICHTAUSW-KZSEL(01)'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPLMGMM' '4004'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=BU'.
+    PERFORM bdc_field       USING 'MAKT-MAKTX'
+                                  ls_data-maktx.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'MARA-MEINS'.
+    PERFORM bdc_field       USING 'MARA-MEINS'
+                                  ls_data-meins.
+    PERFORM bdc_field       USING 'MARA-MTPOS_MARA'
+                                  'NORM'.
+    CALL TRANSACTION 'MM01' USING lt_bdcdata MODE 'A' UPDATE 'S' MESSAGES INTO lt_messtab.
+    REFRESH: lt_bdcdata.
+*perform bdc_transaction using 'MM01'.
+*
+*perform close_group.
+  ENDLOOP.
+
+
+*----------------------------------------------------------------------*
+*        Start new screen                                              *
+*----------------------------------------------------------------------*
+FORM bdc_dynpro USING program dynpro.
+  CLEAR ls_bdcdata.
+  ls_bdcdata-program  = program.
+  ls_bdcdata-dynpro   = dynpro.
+  ls_bdcdata-dynbegin = 'X'.
+  APPEND ls_bdcdata TO lt_bdcdata.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*        Insert field                                                  *
+*----------------------------------------------------------------------*
+FORM bdc_field USING fnam fval.
+  CLEAR ls_bdcdata.
+  ls_bdcdata-fnam = fnam.
+  ls_bdcdata-fval = fval.
+  APPEND ls_bdcdata TO lt_bdcdata.
+ENDFORM.
